@@ -87,10 +87,11 @@ int main(int argc, char** argv) {
 
 
         //create datatypes for line and column FOR RGB AND GREY;
-        MPI_Type_contiguous(cols_per_block, MPI_BYTE, &LineGreyType);
+        //**ATTENTION** keep in mind that LineType is of size cols+2
+        MPI_Type_contiguous(cols_per_block+2, MPI_BYTE, &LineGreyType);
         MPI_Type_commit(&LineGreyType);
 
-        MPI_Type_contiguous(3*cols_per_block, MPI_BYTE, &LineRgbType);
+        MPI_Type_contiguous(3*cols_per_block+2, MPI_BYTE, &LineRgbType);
         MPI_Type_commit(&LineRgbType);
 
         MPI_Type_vector(cols_per_block, 1, rows_per_block, MPI_BYTE, &ColGreyType);
@@ -160,6 +161,7 @@ int main(int argc, char** argv) {
         }
 
      for (int i = 0; i < GENERATION ; i++) {
+         printf("PRIN \n" );
 
              if (west_proc != -1) {
 
@@ -168,48 +170,50 @@ int main(int argc, char** argv) {
              	// MPI_Irecv(offset(src, 1, 0, cols+2), 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &recv_west_req);
                   // MPI_Sendrecv(buffer, 10, MPI_INT, left, 123, buffer2, 10, MPI_INT, right, 123, MPI_COMM_WORLD, &status);
 
-                    MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, 1)] , 1, ColGreyType, process_id, 0, MPI_COMM_WORLD);
+                    MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, 1)] , 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD);
                     MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, 0)] , 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD, &status);
              }
 
+
              if (east_proc != -1) {
              	// MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
-             	// MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
+             	// MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req)
 
-                MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)]     , 1, ColGreyType, process_id, 0, MPI_COMM_WORLD);
-                MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)] , 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD, &status);
+                MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)] , 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD, &status);
+                MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)]     , 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
 
+
+                    printf("3\n" );
 
              }
 
+              printf("AFTER \n" );
+
             if (north_proc != -1) {
-            //
-			// 	MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
-			// 	MPI_Irecv(&block_array_bef[1], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
+
+				MPI_Isend(&block_array_bef[offset(rows_per_block+2, 1 ,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
+				MPI_Irecv(&block_array_bef[offset(rows_per_block+2, 0 ,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
 			}
-            //
+
 
 			if (south_proc != -1) {
-			// 	MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
-			// 	MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
+
+				MPI_Isend(&block_array_bef[offset(rows_per_block+2, cols_per_block  , 1 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
+				MPI_Irecv(&block_array_bef[offset(rows_per_block+2, cols_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
 			}
 
 
             // convoluteInner()
-            // Waitall( ) ta procs na feroun seires sthles
+
             // convolute_perimeter()
 
 
             /* Wait to have sent all borders */
-            // if (north_proc != -1)
-            //     MPI_Wait(&send_row_n, &status);
-            // if (south_proc != -1)
-            //     MPI_Wait(&send_row_s, &status);
-            //
-            // if (west_proc != -1)
-            //     MPI_Wait(&send_col_w, &status);
-            // if (east_proc != -1)
-            //     MPI_Wait(&send_col_e, &status);
+             if (north_proc != -1)
+                 MPI_Wait(&send_row_n, &status);
+             if (south_proc != -1)
+                 MPI_Wait(&send_row_s, &status);
+
 
             /* swap arrays */
             swap_arrays(&block_array_bef , &block_array_after);
