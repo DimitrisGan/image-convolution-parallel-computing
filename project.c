@@ -4,7 +4,7 @@
 #include <math.h>
 #include <mpi.h>
 
-
+#define GENERATION 5
 
  int div2blocks(int, int, int , int*, int* );
  int Argms_handler(int argc,char** argv, int* image_type,int* width,int* height);
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
         }
 
 
-        filtes kernel
+        // filtes kernel
         int emboss_kernel_matrix[3][3]= {{-2,-1,0},{-1,1,1},{0,1,2}};
 
 
@@ -117,7 +117,8 @@ int main(int argc, char** argv) {
 
                    MPI_File_read(fh, &block_array_bef[offset(cols_per_block +2,row+1,1)], cols_per_block, MPI_BYTE, &status);
 
-                   // MPI_FILE_READ_AT(fh, offset, buf, nints,MPI_INT, &status);
+                   // MPI_File_set_view
+
                }
         }
 
@@ -126,6 +127,8 @@ int main(int argc, char** argv) {
 
 
 
+          MPI_Request send_row_n, recv_row_n;
+          MPI_Request send_col_w, recv_col_w;
           MPI_Request send_row_s, recv_row_s;
           MPI_Request send_col_e, recv_col_e;
 
@@ -156,43 +159,44 @@ int main(int argc, char** argv) {
             east_proc = process_id + 1;
         }
 
-     for (int i = 0; i < 10; i++) {
-
-            // if (north != -1) {
+     for (int i = 0; i < GENERATION ; i++) {
+         
+            // if (north_proc != -1) {
             //
 			// 	MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
 			// 	MPI_Irecv(&block_array_bef[1], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
 			// }
             //
-			// if (west != -1) {
+			// if (west_proc != -1) {
             //
 			// 	MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
             //
 			// 	MPI_Irecv(offset(src, 1, 0, cols+2), 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &recv_west_req);
 			// }
-			// if (south != -1) {
+			// if (south_proc != -1) {
 			// 	MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
 			// 	MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
 			// }
-			// if (east != -1) {
+			// if (east_proc != -1) {
 			// 	MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
 			// 	MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
 			// }
+
+            // convoluteInner()
+            // Waitall( ) ta procs na feroun seires sthles
+            // convolute_perimeter()
+
+
+            /* Wait to have sent all borders */
+            // if (north_proc != -1)
+            //     MPI_Wait(&send_row_n, &status);
+            // if (south_proc != -1)
+            //     MPI_Wait(&send_row_s, &status);
             //
-            // // convoluteInner()
-            // // Waitall( ) ta procs na feroun seires sthles
-            // // convolute_perimeter()
-            //
-            //&&
-            // /* Wait to have sent all borders */
-            // if (north != -1)
-            //     MPI_Wait(&send_north_req, &status);
-            // if (west != -1)
-            //     MPI_Wait(&send_west_req, &status);
-            // if (south != -1)
-            //     MPI_Wait(&send_south_req, &status);
-            // if (east != -1)
-            //     MPI_Wait(&send_east_req, &status);
+            // if (west_proc != -1)
+            //     MPI_Wait(&send_col_w, &status);
+            // if (east_proc != -1)
+            //     MPI_Wait(&send_col_e, &status);
 
             /* swap arrays */
             swap_arrays(&block_array_bef , &block_array_after);
@@ -228,6 +232,9 @@ int main(int argc, char** argv) {
  */
 
 
+//convolution_grey()
+//convolution_rgb()
+//reduce()
 
 
 void swap_arrays(char** A , char** B){
