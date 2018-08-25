@@ -11,6 +11,7 @@
 
  int offset(int Cols ,int i ,int offs );
  void swap_arrays(char** A , char** B);
+ int ImageChanged(char* A ,char* B );
 
 
 int main(int argc, char** argv) {
@@ -73,7 +74,8 @@ int main(int argc, char** argv) {
 
 
         // filtes kernel
-        int emboss_kernel_matrix[3][3]= {{-2,-1,0},{-1,1,1},{0,1,2}};
+        int emboss_filter[3][3]= {{-2,-1,0},{-1,1,1},{0,1,2}};
+        int sharpen_filter[3][3]= {{0,-1,0},{-1,5,-1},{0,-1,0}};
 
 
         int start_row_per_proc = (process_id / rooted_num_procs) *rows_per_block;
@@ -161,7 +163,7 @@ int main(int argc, char** argv) {
         }
 
      for (int i = 0; i < GENERATION ; i++) {
-        
+
              if (west_proc != -1) {
 
              	// MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
@@ -181,12 +183,8 @@ int main(int argc, char** argv) {
                 MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)] , 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD, &status);
                 MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)]     , 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
 
-
-                
-
              }
 
-            
 
             if (north_proc != -1) {
 
@@ -204,7 +202,15 @@ int main(int argc, char** argv) {
 
             // convoluteInner()
 
-            // convolute_perimeter()
+            if (north_proc != -1){
+                MPI_Wait(&recv_row_n, &status);
+                // convolute(up)
+            }
+            if (south_proc != -1){
+                MPI_Wait(&recv_row_s, &status);
+                //convolute(down)
+            }
+
 
 
             /* Wait to have sent all borders */
@@ -214,8 +220,13 @@ int main(int argc, char** argv) {
                  MPI_Wait(&send_row_s, &status);
 
 
-            /* swap arrays */
-            swap_arrays(&block_array_bef , &block_array_after);
+
+             /* swap arrays */
+             swap_arrays(&block_array_bef , &block_array_after);
+            /*check if image changed */
+            ImageChanged(block_array_bef ,block_array_after);
+
+
 
         }
 
@@ -248,9 +259,14 @@ int main(int argc, char** argv) {
  */
 
 
+
+inline int ImageChanged(char* A ,char* B ){
+    return strcmp(A, B);
+}
+
+// int convolution(char** A ,char** B ,int** h ,int width , int height);
 //convolution_grey()
 //convolution_rgb()
-//reduce()
 
 
 void swap_arrays(char** A , char** B){
