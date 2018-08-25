@@ -161,8 +161,7 @@ int main(int argc, char** argv) {
         }
 
      for (int i = 0; i < GENERATION ; i++) {
-         printf("PRIN \n" );
-
+        
              if (west_proc != -1) {
 
              	// MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
@@ -183,11 +182,11 @@ int main(int argc, char** argv) {
                 MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)]     , 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
 
 
-                    printf("3\n" );
+                
 
              }
 
-              printf("AFTER \n" );
+            
 
             if (north_proc != -1) {
 
