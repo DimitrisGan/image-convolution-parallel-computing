@@ -4,7 +4,14 @@
 #include <math.h>
 #include <mpi.h>
 
-#define GENERATION 4
+#define GENERATION 2
+
+// find center position of kernel
+#define K_CENTER_X 1
+#define K_CENTER_Y 1
+
+#define KWIDTH 3
+#define KHEIGHT 3
 
 int div2blocks(int, int, int, int*, int* );
 int Argms_handler(int argc,char** argv, int* image_type,int* width,int* height);
@@ -13,6 +20,10 @@ int offset(int Cols,int i,int offs );
 void swap_arrays(char** A, char** B);
 int ImageChanged(char* A,char* B );
 
+int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+
+// void convolute(char *, char *, int, int, int, int, int, int, float**);
+// void convolute_grey(char*, char*, int, int, int, int, float**);
 
 int main(int argc, char** argv) {
 
@@ -78,6 +89,22 @@ int main(int argc, char** argv) {
         // filtes kernel
         int emboss_filter[3][3]= {{-2,-1,0},{-1,1,1},{0,1,2}};
         int sharpen_filter[3][3]= {{0,-1,0},{-1,5,-1},{0,-1,0}};
+        int gaussian_blur[3][3] = {{1, 2, 1}, {2, 4, 2}, {1, 2, 1}};
+
+
+        float **h = malloc(sizeof(float*));
+        for (int i = 0; i < 3; i++) {
+                h[i] =malloc(3* sizeof(float));
+                for (int j = 0; j < 3; j++) {
+
+                        // h[i][j] = emboss_filter[i][j] / 1.0;
+                        // h[i][j] = sharpen_filter[i][j] / 1.0;
+                        h[i][j] = gaussian_blur[i][j] / 16.0;
+
+                }
+        }
+
+
 
 
         int start_row_per_proc = (process_id / rooted_num_procs) *rows_per_block;
@@ -213,6 +240,12 @@ int main(int argc, char** argv) {
 
 
                 // convoluteInner()
+                // int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
+
+                convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, 2, cols_per_block-1,cols_per_block+2,rows_per_block);
+                /* Inner Data Convolute */
+
+                // convolute(block_array_bef, block_array_after, 1, rows_per_block, 1, cols_per_block, cols_per_block, rows_per_block, h);
 
                 if (north_proc != -1) {
                         MPI_Wait(&recv_row_n, &status);
@@ -255,13 +288,13 @@ int main(int argc, char** argv) {
         // char *outImage = malloc((strlen(image_name) +9) * sizeof(char));
         // strcpy(outImage, "emboss_");
         char *outImage = malloc((strlen(image_name) + 7) * sizeof(char));
-    	strcpy(outImage, "blur_");
+        strcpy(outImage, "blur_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
         error = MPI_File_open(MPI_COMM_WORLD, outImage, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFile);
         if (error) {
-        printf( "Unable to open file \"temp\"\n" );fflush(stdout);
+                printf( "Unable to open file \"temp\"\n" ); fflush(stdout);
         }
         for (int row = 0; row < rows_per_block; row++) {
 
@@ -305,12 +338,12 @@ int main(int argc, char** argv) {
 }
 
 /*
-██████   ██████  ██ ███    ██  ██████
-██   ██ ██    ██ ██ ████   ██ ██
-██   ██ ██    ██ ██ ██ ██  ██ ██   ███
-██   ██ ██    ██ ██ ██  ██ ██ ██    ██
-██████   ██████  ██ ██   ████  ██████
-*/
+   ██████   ██████  ██ ███    ██  ██████
+   ██   ██ ██    ██ ██ ████   ██ ██
+   ██   ██ ██    ██ ██ ██ ██  ██ ██   ███
+   ██   ██ ██    ██ ██ ██  ██ ██ ██    ██
+   ██████   ██████  ██ ██   ████  ██████
+ */
 
 
 
@@ -319,13 +352,69 @@ inline int ImageChanged(char* A,char* B ){
         return strcmp(A, B);
 }
 
+// void convolute(char *src, char *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h ) {
+//  int i, j;
+//  // printf("convolute : WIDTH = %d AND HEIGHT = %d \n", width,height );
+//
+//      for (i = row_from ; i <= row_to ; i++)
+//          for (j = col_from ; j <= col_to ; j++)
+//              convolute_grey(src, dst, i, j, width+2, height, h);
+//
+// }
+//
+// void convolute_grey(char *src, char *dst, int x, int y, int width, int height, float** h) {
+//  int i, j, k, l;
+//  // printf("convolute_grey : WIDTH = %d AND HEIGHT = %d \n", width,height );
+//  float val = 0;
+//  for (i = x-1, k = 0 ; i <= x+1 ; i++, k++)
+//      for (j = y-1, l = 0 ; j <= y+1 ; j++, l++)
+//          val += src[width * i + j] * h[k][l];
+//  dst[width * x + y] = val;
+// }
+
+
+
 // int convolution(char** A ,char** B ,int** h ,int width , int height);
-//convolution_grey()
+
 //convolution_rgb()
+// void convolute(uint8_t *src, uint8_t *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h, color_t imageType) {
+
+int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
+
+        int ii,jj;
+
+
+        for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+        {
+                for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
+                {
+                        for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
+                        {
+
+                                for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
+                                {
+                                        // index of input signal, used for checking boundary
+                                        ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
+
+                                        jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
+
+                                        // ignore input samples which are out of bound
+                                        if (ii >= 0 && ii < height && jj >= 0 && jj < width)
+                                                B[width*i + j] += A[width*ii + jj] * h[m][n];
+                                        // P[i][j] += N[ii][jj] * M[m][n];
+                                }
+                        }
+                        // P[i][j] += N[ii][jj] * M[m][n];
+
+                }
+        }
+
+        return 0;
+}
 
 
 void swap_arrays(char** A, char** B){
-        char *temp ;
+        char *temp;
         temp = *A;
         *A = *B;
         *B = temp;
