@@ -4,7 +4,7 @@
 #include <math.h>
 #include <mpi.h>
 
-#define GENERATION 2
+#define GENERATION 40
 
 // find center position of kernel
 #define K_CENTER_X 1
@@ -17,14 +17,14 @@ int div2blocks(int, int, int, int*, int* );
 int Argms_handler(int argc,char** argv, int* image_type,int* width,int* height);
 
 int offset(int Cols,int i,int offs );
-void swap_arrays(char** A, char** B);
-int ImageChanged(char* A,char* B );
+void swap_arrays(unsigned char** A, unsigned char** B);
+int ImageChanged(unsigned char* A,unsigned char* B );
 
-// int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height,int proc_id);
 
 
-void convolute(char *, char *, int, int, int, int, int, int, float**);
-void convolute_grey(char*, char*, int, int, int, int, float**);
+// void convolute(unsigned char *, unsigned char *, int, int, int, int, int, int, float**);
+// void convolute_grey(unsigned char*, unsigned char*, int, int, int, int, float**);
 
 int main(int argc, char** argv) {
 
@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
 
         int width=0;
         int height=0;
-        char* temp_array=NULL;
+        unsigned char* temp_array=NULL;
         int number_offs;
 
         char* image_name = malloc((strlen(argv[1])+1) * sizeof(char));
@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
         int cols_per_block = -1;
 
         int rooted_num_procs;
+        int changed=0;
 
         MPI_Datatype LineGreyType;
         MPI_Datatype LineRgbType;
@@ -73,7 +74,6 @@ int main(int argc, char** argv) {
         }
 
         MPI_Bcast(&rooted_num_procs, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
         MPI_Bcast(&rows_per_block, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&cols_per_block, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -89,19 +89,18 @@ int main(int argc, char** argv) {
 
 
         // filtes kernel
-        int emboss_filter[3][3]= {{-2,-1,0},{-1,1,1},{0,1,2}};
-        int sharpen_filter[3][3]= {{0,-1,0},{-1,5,-1},{0,-1,0}};
+        // int edge_detection[3][3] = {{1, 4, 1}, {4, 8, 4}, {1, 4, 1}};
+        // int box_blur[3][3] = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
         int gaussian_blur[3][3] = {{1, 2, 1}, {2, 4, 2}, {1, 2, 1}};
-
 
         float **h = malloc(sizeof(float*));
         for (int i = 0; i < 3; i++) {
                 h[i] =malloc(3* sizeof(float));
                 for (int j = 0; j < 3; j++) {
 
-                        // h[i][j] = emboss_filter[i][j] / 1.0;
-                        // h[i][j] = sharpen_filter[i][j] / 1.0;
                         h[i][j] = gaussian_blur[i][j] / 16.0;
+                        // h[i][j] = edge_detection[i][j] / 28.0;
+                        // h[i][j] = box_blur[i][j] / 9.0;
 
                 }
         }
@@ -116,12 +115,11 @@ int main(int argc, char** argv) {
         // printf(" start_col = %d per proc : %d \n",start_col_per_proc,process_id );
 
 
-        char* block_array_bef   = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(char));
-        char* block_array_after = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(char));
+        // unsigned char* block_array_bef   = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(char));
+        // unsigned char* block_array_after = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(char));
 
-        // char* block_array_bef   = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(char));
-        // char* block_array_after = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(char));
-
+        unsigned char* block_array_bef   = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(char));
+        unsigned char* block_array_after = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(char));
 
 
 
@@ -154,14 +152,10 @@ int main(int argc, char** argv) {
 
         if (image_type == 0) {
                 for (int row = 0; row < rows_per_block; row++) {
-                        // gia kathe grammh pernoume th grammh ths
-                        MPI_File_seek( fh, (start_row_per_proc + row ) * width + start_col_per_proc, MPI_SEEK_SET );
-                        number_offs = offset(cols_per_block +2,row+1,1);
-                        temp_array = &block_array_bef[number_offs];
-                        // printf("ROW[%d]=FILE READ for proc_id[%d]: offset(cols_per_block +2,row+1,1) = %d\n",row,process_id,offset(cols_per_block +2,row+1,1) );
-                        MPI_File_read(fh, temp_array, cols_per_block, MPI_BYTE, &status);
 
-                        // MPI_File_set_view
+                        MPI_File_seek( fh, (start_row_per_proc + row ) * width + start_col_per_proc, MPI_SEEK_SET );
+                        // printf("ROW[%d]=FILE READ for proc_id[%d]: offset(cols_per_block +2,row+1,1) = %d\n",row,process_id,offset(cols_per_block +2,row+1,1) );
+                        MPI_File_read(fh, &block_array_bef[offset(cols_per_block +2, row+1, 1)], cols_per_block, MPI_BYTE, &status);
 
                 }
         }
@@ -194,8 +188,7 @@ int main(int argc, char** argv) {
                 north_proc = process_id - rooted_num_procs;
         }
         if (start_row_per_proc + rows_per_block != height) {
-            // printf("id = %d : start_row_per_proc = %d + rows_per_block = %d != height = %d  \n",process_id,start_row_per_proc,rows_per_block,height );
-
+                // printf("id = %d : start_row_per_proc = %d + rows_per_block = %d != height = %d  \n",process_id,start_row_per_proc,rows_per_block,height );
                 south_proc = process_id + rooted_num_procs;
         }
         if (start_col_per_proc != 0) {
@@ -204,7 +197,6 @@ int main(int argc, char** argv) {
         if (start_col_per_proc + cols_per_block != width) {
                 east_proc = process_id + 1;
         }
-        // printf("id = %d with north_proc = %d \t south_proc = %d \t west_proc = %d \t east_proc = %d \n",process_id,north_proc,south_proc,west_proc,east_proc );
 
         for (int i = 0; i < GENERATION; i++) {
 
@@ -221,14 +213,13 @@ int main(int argc, char** argv) {
                         MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, 1)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD);
                         MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, 0)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD, &status);
                 }
-                //
-                //
+
                 if (east_proc != -1) {
                         // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
                         // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req)
 
                         // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
-        		    	// MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
+                        // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
 
                         MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD, &status);
                         MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
@@ -238,8 +229,8 @@ int main(int argc, char** argv) {
 
                 if (north_proc != -1) {
 
-                     // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &send_north_req);
-                     // MPI_Irecv(offset(src, 0, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &recv_north_req);
+                        // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &send_north_req);
+                        // MPI_Irecv(offset(src, 0, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &recv_north_req);
                         MPI_Isend(&block_array_bef[offset(cols_per_block+2, 1,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
                         MPI_Irecv(&block_array_bef[offset(cols_per_block+2, 0,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
                 }
@@ -247,17 +238,21 @@ int main(int argc, char** argv) {
 
                 if (south_proc != -1) {
 
-                     // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
-                     // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
+                        // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
+                        // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
                         MPI_Isend(&block_array_bef[offset(rows_per_block+2, cols_per_block, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
                         MPI_Irecv(&block_array_bef[offset(rows_per_block+2, cols_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
                 }
 
 
                 // convoluteInner()
-                // int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
-
-                // convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, 2, cols_per_block-1,cols_per_block+2,rows_per_block);
+                // int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
+                // printf("~~~~~~~Before call convolute :~~~~~~~\n" );
+                // for (int u = 0; u < 36; u++) {
+                //
+                //     printf("block_array_bef[%d] = %d\n",u,block_array_bef[u] );
+                // }
+                // convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, 2, cols_per_block-1,cols_per_block+2,rows_per_block+2,process_id);
                 /* Inner Data Convolute */
 
                 // convolute(block_array_bef, block_array_after, 2, rows_per_block-1, 2, cols_per_block-1, cols_per_block, rows_per_block, h);
@@ -281,31 +276,46 @@ int main(int argc, char** argv) {
                 if (south_proc != -1)
                         MPI_Wait(&send_row_s, &status);
 
+                /*
+                   ███████ ██████  ██     ██
+                   ██      ██   ██ ██     ██
+                   █████   ██   ██ ██  █  ██
+                   ██      ██   ██ ██ ███ ██
+                   ███████ ██████   ███ ███
+                 */
+
+                convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block,process_id);
+
+                // convolute(block_array_bef, block_array_after, 1, rows_per_block, 1, cols_per_block, cols_per_block, rows_per_block, h);
 
 
                 /* swap arrays */
-                // swap_arrays(&block_array_bef, &block_array_after);
-
-                char* tmp = block_array_bef;
-                block_array_bef = block_array_after;
-                block_array_after = tmp;
+                swap_arrays(&block_array_bef, &block_array_after);
+                // unsigned char* tmp=NULL;
+                // tmp = block_array_bef;
+                // block_array_bef = block_array_after;
+                // block_array_after = tmp;
 
                 /*check if image changed */
-                // int changed=0;
+
+                // changed =0;
                 // changed = ImageChanged(block_array_bef,block_array_after);
-                // printf("ImageChanged = %d in process_id = %d  in GENERATION  %d \n",changed,process_id,i );
+                // if (ImageChanged) {
+                //     printf("GENERATION : %d Image Changed = %d \n",i,changed );
+                // }
+                // else{
+                //     printf("GENERATION : %d Image NOT Changed = %d \n",i,changed );
+                // }
 
 
         }
 
 
-
-
         /* Parallel write */
         // char *outImage = malloc((strlen(image_name) +9) * sizeof(char));
         // strcpy(outImage, "emboss_");
-        char *outImage = malloc((strlen(image_name) + 7) * sizeof(char));
-        strcpy(outImage, "blur_");
+        char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
+        strcpy(outImage, "fltred_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
@@ -316,23 +326,9 @@ int main(int argc, char** argv) {
         for (int row = 0; row < rows_per_block; row++) {
 
                 MPI_File_seek(outFile, (start_row_per_proc + row) * width + start_col_per_proc, MPI_SEEK_SET);
-                number_offs = offset(cols_per_block+2,row+1,1);
-                temp_array = &block_array_bef[number_offs];
-                // tmpbuf = offset(src, i, 1, cols+2);
-                // MPI_File_write(outFile, tmpbuf, cols, MPI_BYTE, MPI_STATUS_IGNORE);
-                MPI_File_write(outFile, temp_array, cols_per_block, MPI_BYTE, MPI_STATUS_IGNORE);
+
+                MPI_File_write(outFile, &block_array_bef[offset(cols_per_block+2, row+1, 1)], cols_per_block, MPI_BYTE, MPI_STATUS_IGNORE);
         }
-
-
-        // for (int row = 0; row < rows_per_block; row++) {
-        //     // gia kathe grammh pernoume th grammh ths
-        //     MPI_File_seek( fh, (start_row_per_proc + row ) * width + start_col_per_proc, MPI_SEEK_SET );
-        //
-        //     MPI_File_read(fh, &block_array_bef[offset(cols_per_block +2,row+1,1)], cols_per_block, MPI_BYTE, &status);
-        //
-        //     // MPI_File_set_view
-        //
-        // }
 
 
 
@@ -363,37 +359,37 @@ int main(int argc, char** argv) {
  */
 
 
- void convolute(char *src, char *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h ) {
-  int i, j;
-  // printf("convolute : WIDTH = %d AND HEIGHT = %d \n", width,height );
-
-      for (i = row_from ; i <= row_to ; i++)
-          for (j = col_from ; j <= col_to ; j++)
-              convolute_grey(src, dst, i, j, width+2, height, h);
-
- }
-
- void convolute_grey(char *src, char *dst, int x, int y, int width, int height, float** h) {
-  int i, j, k, l;
-  // printf("convolute_grey : WIDTH = %d AND HEIGHT = %d \n", width,height );
-  float val = 0;
-  for (i = x-1, k = 0 ; i <= x+1 ; i++, k++)
-      for (j = y-1, l = 0 ; j <= y+1 ; j++, l++)
-          val += src[width * i + j] * h[k][l];
-  dst[width * x + y] = val;
- }
-
-
-
-
+// void convolute(unsigned char *src, unsigned char *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h ) {
+//  int i, j;
+//  // printf("convolute : WIDTH = %d AND HEIGHT = %d \n", width,height );
+//
+//      for (i = row_from ; i <= row_to ; i++)
+//          for (j = col_from ; j <= col_to ; j++)
+//              convolute_grey(src, dst, i, j, width+2, height, h);
+//
+// }
+//
+// void convolute_grey(unsigned char *src, unsigned char *dst, int x, int y, int width, int height, float** h) {
+//  int i, j, k, l;
+//  // printf("convolute_grey : WIDTH = %d AND HEIGHT = %d \n", width,height );
+//  float val = 0;
+//  for (i = x-1, k = 0 ; i <= x+1 ; i++, k++)
+//      for (j = y-1, l = 0 ; j <= y+1 ; j++, l++)
+//          val += src[width * i + j] * h[k][l];
+//  dst[width * x + y] = val;
+// }
+//
+//
 
 
 
 
-// int convolution(char** A ,char** B ,int** h ,int width , int height);
+
+
+// int convolution(unsigned char** A ,unsigned char** B ,int** h ,int width , int height);
 
 //convolution_rgb()
-// void convolute(uint8_t *src, uint8_t *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h, color_t imageType) {
+// void convolute(unsigned char *src, unsigned char *dst, int row_from, int row_to, int col_from, int col_to, int width, int height, float** h, color_t imageType) {
 
 
 
@@ -402,44 +398,60 @@ int main(int argc, char** argv) {
 
 
 
-
-
-// int convolute_grey(char* A, char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
 //
-//         int ii,jj;
-//
-//
-//         for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
-//         {
-//                 for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
-//                 {
-//                         for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
-//                         {
-//
-//                                 for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
-//                                 {
-//                                         // index of input signal, used for checking boundary
-//                                         ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
-//
-//                                         jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
-//
-//                                         // ignore input samples which are out of bound
-//                                         if (ii >= 0 && ii < height && jj >= 0 && jj < width)
-//                                                 B[width*i + j] += A[width*ii + jj] * h[m][n];
-//                                         // P[i][j] += N[ii][jj] * M[m][n];
-//                                 }
-//                         }
-//                         // P[i][j] += N[ii][jj] * M[m][n];
-//
-//                 }
-//         }
-//
-//         return 0;
-// }
+
+int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/,int proc_id) {
+
+        int ii,jj;
+        float val=0;
+        // for (int u = 0; u < 36; u++) {
+        //     printf("A[%d] = %d\n",u,A[u] );
+        // }
+        // for (int u = 0; u < 36; u++) {
+        //     printf("B[%d] = %d\n",u,B[u] );
+        // }
+
+        for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+        {
+                for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
+                {
+                        val = 0;
+                        for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
+                        {
+
+                                for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
+                                {
+                                        // index of input signal, used for checking boundary
+                                        ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
+
+                                        jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
+
+                                        // ignore input samples which are out of bound
+                                        if (ii >= 0 && ii < height && jj >= 0 && jj < width) {
+                                                val+=A[(width+2)*ii + jj] * h[m][n];
+                                                // if (proc_id == 0) {
+                                                //     printf("B[%d * %d + %d] += A[%d * %d + %d] * h[%d][%d]  === %d += %d * %f;\n",\
+                                                //                                                             width,i,j,width,ii,jj,m,n ,\
+                                                //                                                             B[width*i + j],A[width*ii + jj] ,h[m][n] );
+                                                // }
+
+                                        }
+                                        // P[i][j] += N[ii][jj] * M[m][n];
+                                }
+
+                        }
+                        B[(width+2)*i + j] = val;
+                        // P[i][j] += N[ii][jj] * M[m][n];
+
+                }
+        }
+
+        return 0;
+}
 
 
-void swap_arrays(char** A, char** B){
-        char *temp;
+inline void swap_arrays(unsigned char** A, unsigned char** B){
+        unsigned char *temp;
         temp = *A;
         *A = *B;
         *B = temp;
@@ -484,7 +496,7 @@ int offset(int k,int i,int offs ){ //k = cols or rows
 }
 
 
-inline int ImageChanged(char* A,char* B ){
+inline int ImageChanged(unsigned char* A,unsigned char* B ){
         return strcmp(A, B);
 }
 
