@@ -4,7 +4,7 @@
 #include <math.h>
 #include <mpi.h>
 
-#define GENERATION 40
+#define GENERATION 20
 
 // find center position of kernel
 #define K_CENTER_X 1
@@ -41,6 +41,11 @@ int main(int argc, char** argv) {
 
         int rows_per_block = -1;
         int cols_per_block = -1;
+
+        int flag1=0;
+        int flag2=0;
+        int flag11=0;
+        int flag22=0;
 
         int rooted_num_procs;
         int changed=0;
@@ -240,12 +245,44 @@ int main(int argc, char** argv) {
 
                         // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
                         // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
-                        MPI_Isend(&block_array_bef[offset(rows_per_block+2, cols_per_block, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
-                        MPI_Irecv(&block_array_bef[offset(rows_per_block+2, cols_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
+                        MPI_Isend(&block_array_bef[offset(cols_per_block+2, rows_per_block, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
+                        MPI_Irecv(&block_array_bef[offset(cols_per_block+2, rows_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
                 }
 
 
                 // convoluteInner()
+                convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block,process_id);
+
+                // while (flag1==0 || flag2!=1 ) {
+                //     flag1=0;
+                //     MPI_Test(&request, &flag1, &status);
+                //     if (flag1=1) {
+                //         // convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, 1, cols_per_block,cols_per_block,rows_per_block,process_id);
+                //     }
+                //
+                //
+                //     flag2=0;
+                //     MPI_Test(&request, &flag2, &status);
+                //     if (flag2 = 1) {
+                //
+                //     }
+                // }
+
+
+                //
+                // while (1) {
+                //         MPI_Test(&recv_row_n, &flag1, &status);
+                //         MPI_Test(&recv_row_s, &flag2, &status);
+                //         if (flag1 == 1)
+                //             convolute_grey()
+                //         if (flag2 == 1)
+                //             convolute_grey()
+                //         if (flag1 == 1 && flag2 == 1)
+                //             break;
+                // }
+
+
+
                 // int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height) {
                 // printf("~~~~~~~Before call convolute :~~~~~~~\n" );
                 // for (int u = 0; u < 36; u++) {
@@ -259,14 +296,71 @@ int main(int argc, char** argv) {
 
                 // convolute(block_array_bef, block_array_after, 1, rows_per_block, 1, cols_per_block, cols_per_block, rows_per_block, h);
 
+
+                // flag1=0;
+                // flag2=0;
+                // flag11 =0;
+                // flag22=0;
+                // while (1) {
+                //     if (north_proc != -1) {
+                //             // MPI_Wait(&recv_row_n, &status);
+                //             MPI_Test(&recv_row_n, &flag1, &status);
+                //             printf("flag1 = %d\n",flag1 );
+                //             if (flag1 == 1){
+                //                 // convolute_grey(up);
+                //                 convolute_grey(block_array_bef, block_array_after, h, 1, 1, 2, cols_per_block-1,cols_per_block,rows_per_block,process_id);
+                //                 flag11=1;
+                //             }
+                //     }
+                //     else{
+                //         flag11 =1 ;
+                //     }
+                //     if (south_proc != -1) {
+                //             // MPI_Wait(&recv_row_s, &status);
+                //             MPI_Test(&recv_row_s, &flag2, &status);
+                //             printf("flag2 = %d\n",flag2 );
+                //             if (flag2 == 1) {
+                //                 // convolute_grey(down)
+                //                 convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 2, cols_per_block-1,cols_per_block,rows_per_block,process_id);
+                //                 flag22=1;
+                //             }
+                //     }
+                //     else{
+                //         flag22 =1;
+                //     }
+                //
+                //     if (flag11 == 1 && flag22 == 1) {
+                //         break;
+                //     }
+                // }
+
+
+
+                if (west_proc != -1) {
+                        // convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, 1, 1, cols_per_block,rows_per_block,process_id);
+                        convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block,process_id);
+
+                }
+                if (east_proc != -1) {
+        			// convolute(src, dst, 2, rows-1, cols, cols, cols, rows, h, imageType);
+                    // convolute_grey(block_array_bef, block_array_after, h, 2, rows_per_block-1, cols_per_block, cols_per_block, cols_per_block,rows_per_block,process_id);
+                    convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block,process_id);
+
+        		}
+
                 if (north_proc != -1) {
                         MPI_Wait(&recv_row_n, &status);
-                        // convolute(up)
+                        // convolute_grey(block_array_bef, block_array_after, h, 1, 1, 2, cols_per_block-1, cols_per_block,rows_per_block,process_id);
+                        convolute_grey(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block,process_id);
+
                 }
                 if (south_proc != -1) {
                         MPI_Wait(&recv_row_s, &status);
-                        //convolute(down)
+                        // convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 2, cols_per_block-1, cols_per_block,rows_per_block,process_id);
+                        convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block,process_id);
+
                 }
+
 
 
 
@@ -284,7 +378,7 @@ int main(int argc, char** argv) {
                    ███████ ██████   ███ ███
                  */
 
-                convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block,process_id);
+                // convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block,process_id);
 
                 // convolute(block_array_bef, block_array_after, 1, rows_per_block, 1, cols_per_block, cols_per_block, rows_per_block, h);
 
@@ -312,8 +406,6 @@ int main(int argc, char** argv) {
 
 
         /* Parallel write */
-        // char *outImage = malloc((strlen(image_name) +9) * sizeof(char));
-        // strcpy(outImage, "emboss_");
         char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
         strcpy(outImage, "fltred_");
 
@@ -427,7 +519,7 @@ int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start,
                                         jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
 
                                         // ignore input samples which are out of bound
-                                        if (ii >= 0 && ii < height && jj >= 0 && jj < width) {
+                                        // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
                                                 val+=A[(width+2)*ii + jj] * h[m][n];
                                                 // if (proc_id == 0) {
                                                 //     printf("B[%d * %d + %d] += A[%d * %d + %d] * h[%d][%d]  === %d += %d * %f;\n",\
@@ -435,7 +527,7 @@ int convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start,
                                                 //                                                             B[width*i + j],A[width*ii + jj] ,h[m][n] );
                                                 // }
 
-                                        }
+                                        // }
                                         // P[i][j] += N[ii][jj] * M[m][n];
                                 }
 
