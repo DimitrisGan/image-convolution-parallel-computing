@@ -1,0 +1,3 @@
+Compile: mpicc -openmp -o project project.c -lm
+
+mpiexec -np 4 ./project  waterfall_grey_1920_2520.raw grey  1920 2520
