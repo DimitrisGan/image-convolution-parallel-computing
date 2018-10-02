@@ -1,5 +1,6 @@
 CMPI=mpicc
-CMPIFLAGS= -openmp
+CFLAGS=-Wall -g
+CMPIFLAGS= -fopenmp
 
 mpi_source=$(addprefix mpi/,mpi.c)
 mpi_outputs=$(addprefix mpi/,output_images/*)
@@ -14,20 +15,20 @@ all: mpi open_mp
 #-------------------------------------------------------------------------
 
 mpi: mpi.o
-	$(CMPI) mpi.o -o mpi_exe -lm
+	$(CMPI) $(CFLAGS) mpi.o -o mpi_exe -lm
 	rm -f mpi.o
 
 mpi.o: $(mpi_source)
-	$(CMPI) -c $(mpi_source)
+	$(CMPI) $(CFLAGS) -c $(mpi_source)
 
 #-----------------------------------------------------------------------------------
 
 open_mp: open_mp.o
-	$(CMPI) $(CMPIFLAGS) open_mp.o -o open_mp_exe -lm
+	$(CMPI) $(CFLAGS) $(CMPIFLAGS) open_mp.o -o open_mp_exe -lm
 	rm -f open_mp.o
 
 open_mp.o: $(open_mp_source)
-	$(CMPI) -c $(open_mp_source)
+	$(CMPI) $(CFLAGS) $(CMPIFLAGS) -c $(open_mp_source)
 
 #-----------------------------------------------------------------------------------
 

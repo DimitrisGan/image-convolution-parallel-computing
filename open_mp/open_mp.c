@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
-#include "omp.h"
+#include <omp.h>
 
 #define GENERATION 20
 
@@ -33,8 +33,42 @@ int main(int argc, char** argv) {
         unsigned char* temp_array=NULL;
         int number_offs;
 
-        char* image_name = malloc((strlen(argv[1])+1) * sizeof(char));
-        strcpy(image_name, argv[1]);
+        char * image_src_file = "../input_images/";
+        char* image_name = malloc((strlen(argv[1]) + strlen(image_src_file) + 1 ) * sizeof(char));
+        strcpy(image_name, image_src_file);
+        strcat(image_name, argv[1]);
+
+        printf("image:'%s'\n", image_name);
+
+        char pure_image_name[strlen(argv[1]) - 4 + 1]; // Input string
+        strncpy(pure_image_name, argv[1], strlen(argv[1]) - 4);
+        pure_image_name[strlen(argv[1]) - 4] = '\0'; // null terminate destination
+        printf("pure image:'%s'\n", pure_image_name);
+
+        char * resol = malloc((strlen(argv[3]) + strlen(argv[4]) + 1 + 2 + 4) * sizeof(char));
+        strcpy(resol, "_");
+        strcat(resol, argv[3]);
+        strcat(resol, "_");
+        strcat(resol, argv[4]);
+        strcat(resol, ".raw");
+        printf("resolution:'%s'\n", resol);
+
+        char * outImage = malloc((strlen(resol) + strlen(pure_image_name) + 1 + strlen("output_images/filtred_") ) * sizeof(char));
+        strcpy(outImage, "output_images/filtred_");
+        strcat(outImage, pure_image_name);
+        strcat(outImage, resol);
+
+        printf("output image:'%s'\n", outImage);
+        FILE * fp = fopen("waterfall_grey.raw", "r");
+        if (fp == NULL)
+        {
+          printf("olo malakies\n");
+        }
+
+        exit(1);
+
+        /*char* image_name = malloc((strlen(argv[1])+1) * sizeof(char));
+        strcpy(image_name, argv[1]);*/
         int image_type;
 
         int rows_per_block = -1;
@@ -329,10 +363,10 @@ int main(int argc, char** argv) {
 
 
         /* Parallel write */
-        char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
-        strcpy(outImage, "fltred_");
+      /*  char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
+        strcpy(outImage, "fltred_");*/
 
-        strcat(outImage, image_name);
+      //  strcat(outImage, image_name);
         MPI_File outFile;
         error = MPI_File_open(MPI_COMM_WORLD, outImage, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFile);
         if (error) {
@@ -382,13 +416,13 @@ inline void convolute_grey(unsigned char* A, unsigned char* B, float** h, int ro
         int ii,jj;
         float val=0;
 
-#pragma omp parallel for shared(A, B) schedule(static) collapse(3)
+#pragma omp parallel for shared(A, B) schedule(static) collapse(4)
 
         for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
         {
                 for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
                 {
-                        val = 0;
+                        //val = 0;
                         for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
                         {
 
@@ -406,6 +440,7 @@ inline void convolute_grey(unsigned char* A, unsigned char* B, float** h, int ro
                                 }
                         }
                         B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
+                        val=0;
                 }
         }
 }
