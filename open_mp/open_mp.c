@@ -30,8 +30,7 @@ int main(int argc, char** argv) {
 
         int width=0;
         int height=0;
-        unsigned char* temp_array=NULL;
-        int number_offs;
+
 
         char * image_src_file = "../input_images/";
         char* image_name = malloc((strlen(argv[1]) + strlen(image_src_file) + 1 ) * sizeof(char));
@@ -476,7 +475,7 @@ inline int offset(int k,int i,int offs ){ //k = cols or rows
         return k*i + offs;
 }
 
-inline int ImageChanged(unsigned char* A,unsigned char* B ){
+inline int ImageChanged(unsigned char* A, unsigned char* B ){
         return strcmp(A, B);
 }
 
