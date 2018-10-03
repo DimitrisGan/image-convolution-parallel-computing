@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 #define GENERATION 40
 
@@ -20,7 +21,11 @@ int offset(int Cols,int i,int offs );
 void swap_arrays(unsigned char** A, unsigned char** B);
 int ImageChanged(unsigned char* A,unsigned char* B,int array_size);
 
-void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+// void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+
+void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val);
+
 
 
 int main(int argc, char** argv) {
@@ -235,7 +240,7 @@ int main(int argc, char** argv) {
 
 
                 // convoluteInner()
-                convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block);
+                convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block);
 
 
 
@@ -250,7 +255,7 @@ int main(int argc, char** argv) {
                                 // printf("flag1 = %d\n",flag1 );
                                 if (flag1 == 1) {
                                         // convolute_grey(up);
-                                        convolute_grey(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
+                                        convolute(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
 
                                         flag11=1;
                                 }
@@ -264,7 +269,7 @@ int main(int argc, char** argv) {
                                 // printf("flag2 = %d\n",flag2 );
                                 if (flag2 == 1) {
                                         // convolute_grey(down)
-                                        convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
+                                        convolute(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
                                         flag22=1;
                                 }
                         }
@@ -280,10 +285,10 @@ int main(int argc, char** argv) {
 
 
                 if (west_proc != -1) {
-                        convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block);
+                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block);
                 }
                 if (east_proc != -1) {
-                        convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block);
+                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block);
                 }
                 // if (north_proc != -1) {
                 //         MPI_Wait(&recv_row_n, &status);
@@ -379,35 +384,68 @@ int main(int argc, char** argv) {
  */
 
 
-inline void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
+// inline void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
+//
+//         int ii,jj;
+//         float val=0;
+//
+//         for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+//         {
+//                 for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
+//                 {
+//                         val = 0;
+//                         for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
+//                         {
+//
+//                                 for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
+//                                 {
+//                                         // index of input signal, used for checking boundary
+//                                         ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
+//
+//                                         jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
+//
+//                                         // ignore input samples which are out of bound
+//                                         // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
+//                                         val+=A[(width+2)*ii + jj] * h[m][n];
+//                                         // }
+//                                 }
+//                         }
+//                         B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
+//                 }
+//         }
+// }
 
-        int ii,jj;
-        float val=0;
+inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
+int i, j;
+int ii=0;
+int jj=0;
+//float val=0;
 
-        for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+#pragma omp parallel for shared(A, B) schedule(static) collapse(4)
+        for (i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+                for (j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
+                        convolute_grey(A, B, i, j, h, width, height, ii, jj, 0);
+}
+
+inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val)
+{
+        for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
         {
-                for (int j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
+                for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
                 {
-                        val = 0;
-                        for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
-                        {
+                        // index of input signal, used for checking boundary
+                        ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
 
-                                for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
-                                {
-                                        // index of input signal, used for checking boundary
-                                        ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
+                        jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
 
-                                        jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
-
-                                        // ignore input samples which are out of bound
-                                        // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
-                                        val+=A[(width+2)*ii + jj] * h[m][n];
-                                        // }
-                                }
-                        }
-                        B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
+                        // ignore input samples which are out of bound
+                        // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
+                        val+=A[(width+2)*ii + jj] * h[m][n];
+                        // }
                 }
         }
+        B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
+
 }
 
 
