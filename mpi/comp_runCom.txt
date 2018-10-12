@@ -1,3 +1,6 @@
-mpicc -o project project.c -lm
+mpicc -Wall -o mpi mpi.c  -lm
 
-mpiexec -np 4 ./project  waterfall_grey_1920_2520.raw grey  1920 2520
+mpiexec  -np 16 ./mpi  waterfall_grey_1920_2520.raw grey  1920 2520
+
+mpiexec  -np 16 ./mpi  waterfall_1920_2520.raw rgb  1920 2520
+
