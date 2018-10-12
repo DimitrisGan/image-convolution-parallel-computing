@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 
 #define GENERATION 40
 
@@ -25,8 +26,8 @@ int ImageChanged(unsigned char* A,unsigned char* B,int array_size);
 // void convolute_rgb(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
 
 void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height,int image_type);
-void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val);
-void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val);
+void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/);
+void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/);
 
 
 
@@ -494,8 +495,7 @@ int main(int argc, char** argv) {
 
 inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/,int image_type) {
         int i, j;
-        int ii=0;
-        int jj=0;
+
         //float val=0;
         if (image_type == 0) {
 
@@ -503,27 +503,29 @@ inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_sta
                 // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
                 for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
                         for (j = col_start; j <= col_end; ++j)   // columns [1,cols_per_block] correct
-                                convolute_grey(A, B, i, j, h, width, height, ii, jj, 0);
+                                convolute_grey(A, B, i, j, h, width, height);
         }
         else{
-
+/*
                 // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
                 for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
                         for (j = col_start; j <= col_end; j++)   // columns [1,cols_per_block] correct
-                                convolute_rgb(A, B, i, 3*j, h, 3*width + 6, height, ii, jj, 0);
+    */                            convolute_rgb(A, B, i, 3*j, h, 3*width + 6, height);
         }
 }
 
-inline void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val)
+inline void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/)
 {
         float val_red = 0;
         float val_green = 0;
         float val_blue = 0;
+
         for (int m = 0; m < 3; ++m)  // kernel rows [0-3] correct
         {
                 for (int n = 0; n < 3; ++n)  // kernel columns [0-3] correct
                 {
                         // index of input signal, used for checking boundary
+                        int ii, jj;
                         ii = i + (m - K_CENTER_Y);  // i +m -1 ----> curr_row_block + curr_row_kernel -1
 
                         jj = j + 3*(n - K_CENTER_X);  // j +n -1 ----> curr_col_block + curr_col_kernel -1
@@ -547,14 +549,20 @@ inline void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, floa
 
 }
 
-inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val)
+inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/)
 {
+        int m, n;
+        float val = 0;
+        int ii=0;
+        int jj=0;
 
-        for (int m = 0; m < 3; ++m)  // kernel rows [0-3] correct
+//#pragma omp parallel for simd reduction(+:val) collapse(2)
+        for (m = 0; m < 3; ++m)  // kernel rows [0-3] correct
         {
-                for (int n = 0; n < 3; ++n)  // kernel columns [0-3] correct
+                for (n = 0; n < 3; ++n)  // kernel columns [0-3] correct
                 {
                         // index of input signal, used for checking boundary
+
                         ii = i + (m - K_CENTER_Y);  // i +m -1 ----> curr_row_block + curr_row_kernel -1
 
                         jj = j + (n - K_CENTER_X);  // j +n -1 ----> curr_col_block + curr_col_kernel -1
@@ -567,7 +575,6 @@ inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, flo
 
                 }
         }
-
         B[(width+2)*i + j] = val;  // P[i][j] += N[ii][jj] * M[m][n];
 
 }
