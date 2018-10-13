@@ -17,21 +17,13 @@ all: mpi open_mp
 
 #-------------------------------------------------------------------------
 
-mpi: mpi.o
-	$(CMPI) $(CFLAGS) mpi.o -o $(MPDIR)mpi_exe -lm
-	rm -f mpi.o
-
-mpi.o: $(mpi_source)
-	$(CMPI) $(CFLAGS) -c $(mpi_source)
+mpi:
+	$(CMPI) $(CFLAGS) -o $(MPDIR)mpi_exe $(mpi_source) -lm
 
 #-----------------------------------------------------------------------------------
 
-open_mp: open_mp.o
-	$(CMPI) $(CFLAGS) $(CMPIFLAGS) open_mp.o -o $(OPENMPDIR)open_mp_exe -lm
-	rm -f open_mp.o
-
-open_mp.o: $(open_mp_source)
-	$(CMPI) $(CFLAGS) $(CMPIFLAGS) -c $(open_mp_source)
+open_mp:
+	$(CMPI) $(CFLAGS) $(CMPIFLAGS) -o $(OPENMPDIR)open_mp_exe $(open_mp_source) -lm
 
 #-----------------------------------------------------------------------------------
 
