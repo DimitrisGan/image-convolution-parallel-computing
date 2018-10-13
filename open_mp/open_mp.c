@@ -22,9 +22,12 @@ void swap_arrays(unsigned char** A, unsigned char** B);
 int ImageChanged(unsigned char* A,unsigned char* B,int array_size);
 
 // void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
+// //TODO
+// void convolute_rgb(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
 
-void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height);
-void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val);
+void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int height,int image_type);
+void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/);
+void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/);
 
 
 
@@ -78,6 +81,7 @@ int main(int argc, char** argv) {
 
                 rooted_num_procs = div2blocks(height, width, num_processes, &rows_per_block, &cols_per_block);
                 printf("rows_per_block = %d | cols_per_block = %d \n",rows_per_block,cols_per_block );
+                printf("image type = %d \n",image_type );
 
         }
 
@@ -112,23 +116,41 @@ int main(int argc, char** argv) {
         // printf(" start_row = %d per proc : %d \n",start_row_per_proc,process_id );
         // printf(" start_col = %d per proc : %d \n",start_col_per_proc,process_id );
 
-        int array_grey_size   = (rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char);
-        unsigned char* block_array_bef   = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char));
-        unsigned char* block_array_after = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char));
+        int array_size;
+        unsigned char* block_array_bef;
+        unsigned char* block_array_after;
+        // printf("2.image type = %d \n",image_type );
 
+
+        if (image_type == 0) {
+
+                array_size   = (rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char);
+                // block_array_bef   = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char));
+                // block_array_after = malloc((rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char));
+                block_array_bef   = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(unsigned char));
+                block_array_after   = calloc((rows_per_block + 2)*(cols_per_block + 2), sizeof(unsigned char));
+        }
+        else{
+                array_size   = (rows_per_block + 2)*(3*cols_per_block + 2*3)* sizeof(unsigned char);
+                block_array_bef   = malloc(array_size);
+                block_array_after = malloc(array_size);
+
+        }
         //create datatypes for line and column FOR RGB AND GREY;
         //**ATTENTION** keep in mind that LineType is of size cols+2
         MPI_Type_contiguous(cols_per_block+2, MPI_BYTE, &LineGreyType);
         MPI_Type_commit(&LineGreyType);
 
+        MPI_Type_contiguous(3*cols_per_block+ 2*3, MPI_BYTE, &LineRgbType);
+        MPI_Type_commit(&LineRgbType);
+
+
         MPI_Type_vector(rows_per_block, 1, cols_per_block+2, MPI_BYTE, &ColGreyType);
         MPI_Type_commit(&ColGreyType);
 
-
-        MPI_Type_contiguous(3*cols_per_block+2, MPI_BYTE, &LineRgbType);
-        MPI_Type_commit(&LineRgbType);
-
-        MPI_Type_vector(3*cols_per_block, 1, rows_per_block, MPI_BYTE, &ColRgbType);
+        //TODO
+        // MPI_Type_vector(3*rows_per_block, 1, cols_per_block, MPI_BYTE, &ColRgbType);
+        MPI_Type_vector(rows_per_block, 3, 3*cols_per_block + 2*3, MPI_BYTE, &ColRgbType);
         MPI_Type_commit(&ColRgbType);
 
 
@@ -147,6 +169,16 @@ int main(int argc, char** argv) {
                         MPI_File_read(fh, &block_array_bef[offset(cols_per_block +2, row+1, 1)], cols_per_block, MPI_BYTE, &status);
 
                 }
+        }
+        else{
+                for (int row = 0; row < rows_per_block; row++) {
+
+                        MPI_File_seek( fh, 3*(start_row_per_proc + row ) * width + 3*start_col_per_proc, MPI_SEEK_SET );
+                        // printf("ROW[%d]=FILE READ for proc_id[%d]: offset(cols_per_block +2,row+1,1) = %d\n",row,process_id,offset(cols_per_block +2,row+1,1) );
+                        MPI_File_read(fh, &block_array_bef[offset(cols_per_block*3 +2*3, row+1, 3)], 3*cols_per_block, MPI_BYTE, &status);
+
+                }
+
         }
 
         MPI_File_close(&fh);
@@ -194,53 +226,105 @@ int main(int argc, char** argv) {
 
         for (int i = 0; i < GENERATION; i++) {
 
-                if (west_proc != -1) {
+                if ( image_type == 0) {
+                        if (west_proc != -1) {
 
-                        // MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
-                        //
-                        // MPI_Irecv(offset(src, 1, 0, cols+2), 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &recv_west_req);
-                        // MPI_Sendrecv(buffer, 10, MPI_INT, left, 123, buffer2, 10, MPI_INT, right, 123, MPI_COMM_WORLD, &status);
+                                // MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
+                                //
+                                // MPI_Irecv(offset(src, 1, 0, cols+2), 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &recv_west_req);
+                                // MPI_Sendrecv(buffer, 10, MPI_INT, left, 123, buffer2, 10, MPI_INT, right, 123, MPI_COMM_WORLD, &status);
 
-                        // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &send_west_req);
-                        // MPI_Irecv(offset(src, 1, 0, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &recv_west_req);
+                                // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &send_west_req);
+                                // MPI_Irecv(offset(src, 1, 0, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &recv_west_req);
 
-                        MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, 1)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD);
-                        MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, 0)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD, &status);
+                                MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, 1)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD);
+                                MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, 0)], 1, ColGreyType, west_proc, 0, MPI_COMM_WORLD, &status);
+                        }
+
+                        if (east_proc != -1) {
+                                // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
+                                // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req)
+
+                                // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
+                                // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
+
+                                MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD, &status);
+                                MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
+
+                        }
+
+
+                        if (north_proc != -1) {
+
+                                // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &send_north_req);
+                                // MPI_Irecv(offset(src, 0, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &recv_north_req);
+                                MPI_Isend(&block_array_bef[offset(cols_per_block+2, 1,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
+                                MPI_Irecv(&block_array_bef[offset(cols_per_block+2, 0,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
+                        }
+
+
+                        if (south_proc != -1) {
+
+                                // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
+                                // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
+                                MPI_Isend(&block_array_bef[offset(cols_per_block+2, rows_per_block, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
+                                MPI_Irecv(&block_array_bef[offset(cols_per_block+2, rows_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
+                        }
                 }
 
-                if (east_proc != -1) {
-                        // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
-                        // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req)
+                else{
 
-                        // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
-                        // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
+                        if (west_proc != -1) {
 
-                        MPI_Recv(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block + 1)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD, &status);
-                        MPI_Send(&block_array_bef[offset(cols_per_block +2, 1, cols_per_block)], 1, ColGreyType, east_proc, 0, MPI_COMM_WORLD);
+                                // MPI_Isend(&block_array_bef[1*(cols_per_block+2) + 1], 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &send_west_req);
+                                //
+                                // MPI_Irecv(offset(src, 1, 0, cols+2), 1, ColGreyType,  west, 0, MPI_COMM_WORLD, &recv_west_req);
+                                // MPI_Sendrecv(buffer, 10, MPI_INT, left, 123, buffer2, 10, MPI_INT, right, 123, MPI_COMM_WORLD, &status);
 
-                }
+                                // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &send_west_req);
+                                // MPI_Irecv(offset(src, 1, 0, cols+2), 1, grey_col_type,  west, 0, MPI_COMM_WORLD, &recv_west_req);
+
+                                MPI_Send(&block_array_bef[offset(3*cols_per_block +2*3, 1, 1*3)], 1, ColRgbType, west_proc, 0, MPI_COMM_WORLD);
+                                MPI_Recv(&block_array_bef[offset(3*cols_per_block +2*3, 1, 0)], 1, ColRgbType, west_proc, 0, MPI_COMM_WORLD, &status);
+                        }
+
+                        if (east_proc != -1) {
+                                // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
+                                // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req)
+
+                                // MPI_Isend(offset(src, 1, cols, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &send_east_req);
+                                // MPI_Irecv(offset(src, 1, cols+1, cols+2), 1, grey_col_type,  east, 0, MPI_COMM_WORLD, &recv_east_req);
+
+                                MPI_Recv(&block_array_bef[offset(3*cols_per_block +2*3, 1, 3*cols_per_block + 1*3)], 1, ColRgbType, east_proc, 0, MPI_COMM_WORLD, &status);
+                                MPI_Send(&block_array_bef[offset(3*cols_per_block +2*3, 1, 3*cols_per_block)], 1, ColRgbType, east_proc, 0, MPI_COMM_WORLD);
+
+                        }
 
 
-                if (north_proc != -1) {
+                        if (north_proc != -1) {
 
-                        // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &send_north_req);
-                        // MPI_Irecv(offset(src, 0, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &recv_north_req);
-                        MPI_Isend(&block_array_bef[offset(cols_per_block+2, 1,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
-                        MPI_Irecv(&block_array_bef[offset(cols_per_block+2, 0,0)], 1, LineGreyType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
-                }
+                                // MPI_Isend(offset(src, 1, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &send_north_req);
+                                // MPI_Irecv(offset(src, 0, 1, cols+2), 1, grey_row_type, north, 0, MPI_COMM_WORLD, &recv_north_req);
+                                MPI_Isend(&block_array_bef[offset(3*cols_per_block+2*3, 1,0)], 1, LineRgbType, north_proc, 0, MPI_COMM_WORLD, &send_row_n);
+                                MPI_Irecv(&block_array_bef[offset(3*cols_per_block+2*3, 0,0)], 1, LineRgbType, north_proc, 0, MPI_COMM_WORLD, &recv_row_n);
+                        }
 
 
-                if (south_proc != -1) {
+                        if (south_proc != -1) {
 
-                        // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
-                        // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
-                        MPI_Isend(&block_array_bef[offset(cols_per_block+2, rows_per_block, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
-                        MPI_Irecv(&block_array_bef[offset(cols_per_block+2, rows_per_block+1, 0 )], 1, LineGreyType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
+                                // MPI_Isend(offset(src, rows, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &send_south_req);
+                                // MPI_Irecv(offset(src, rows+1, 1, cols+2), 1, grey_row_type, south, 0, MPI_COMM_WORLD, &recv_south_req);
+                                MPI_Isend(&block_array_bef[offset(3*cols_per_block+2*3, rows_per_block, 0 )], 1, LineRgbType, south_proc, 0, MPI_COMM_WORLD, &send_row_s);
+                                MPI_Irecv(&block_array_bef[offset(3*cols_per_block+2*3, rows_per_block+1, 0 )], 1, LineRgbType, south_proc, 0, MPI_COMM_WORLD, &recv_row_s);
+                        }
+
                 }
 
 
                 // convoluteInner()
-                convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block);
+                // convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block);
+
+                convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,rows_per_block,image_type);
 
 
 
@@ -255,7 +339,9 @@ int main(int argc, char** argv) {
                                 // printf("flag1 = %d\n",flag1 );
                                 if (flag1 == 1) {
                                         // convolute_grey(up);
-                                        convolute(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
+                                        // convolute_grey(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
+
+                                        convolute(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block,image_type);
 
                                         flag11=1;
                                 }
@@ -269,7 +355,9 @@ int main(int argc, char** argv) {
                                 // printf("flag2 = %d\n",flag2 );
                                 if (flag2 == 1) {
                                         // convolute_grey(down)
-                                        convolute(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
+                                        // convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
+
+                                        convolute(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block,image_type);
                                         flag22=1;
                                 }
                         }
@@ -285,19 +373,27 @@ int main(int argc, char** argv) {
 
 
                 if (west_proc != -1) {
-                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block);
+                        // convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block);
+
+                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, 1, cols_per_block,rows_per_block,image_type);
                 }
                 if (east_proc != -1) {
-                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block);
+                        // convolute_grey(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block);
+
+                        convolute(block_array_bef, block_array_after, h, 1, rows_per_block, cols_per_block, cols_per_block, cols_per_block,rows_per_block,image_type);
                 }
-                // if (north_proc != -1) {
-                //         MPI_Wait(&recv_row_n, &status);
-                //         convolute_grey(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
-                // }
-                // if (south_proc != -1) {
-                //         MPI_Wait(&recv_row_s, &status);
-                //         convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
-                // }
+                if (north_proc != -1) {
+                        MPI_Wait(&recv_row_n, &status);
+                        // convolute_grey(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block);
+
+                        convolute(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,rows_per_block,image_type);
+                }
+                if (south_proc != -1) {
+                        MPI_Wait(&recv_row_s, &status);
+                        // convolute_grey(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block);
+
+                        convolute(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,rows_per_block,image_type);
+                }
 
 
                 /* Wait to have sent all borders */
@@ -316,7 +412,7 @@ int main(int argc, char** argv) {
                 /*check if image changed */
 
                 // changed =0;
-                // changed = ImageChanged(block_array_bef,block_array_after,array_grey_size);
+                // changed = ImageChanged(block_array_bef,block_array_after,array_size);
                 // if ( changed ) {
                 //         // printf("GENERATION : %d Image Changed = %d \n",i,changed );
                 // }
@@ -334,7 +430,7 @@ int main(int argc, char** argv) {
 
         /* Parallel write */
         char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
-        strcpy(outImage, "fltred_");
+        strcpy(outImage, "filtered_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
@@ -342,11 +438,23 @@ int main(int argc, char** argv) {
         if (error) {
                 printf( "Unable to open the output file..No space! \n" ); fflush(stdout);
         }
-        for (int row = 0; row < rows_per_block; row++) {
 
-                MPI_File_seek(outFile, (start_row_per_proc + row) * width + start_col_per_proc, MPI_SEEK_SET);
 
-                MPI_File_write(outFile, &block_array_bef[offset(cols_per_block+2, row+1, 1)], cols_per_block, MPI_BYTE, MPI_STATUS_IGNORE);
+        if (image_type == 0) {
+                for (int row = 0; row < rows_per_block; row++) {
+
+                        MPI_File_seek(outFile, (start_row_per_proc + row) * width + start_col_per_proc, MPI_SEEK_SET);
+
+                        MPI_File_write(outFile, &block_array_bef[offset(cols_per_block+2, row+1, 1)], cols_per_block, MPI_BYTE, MPI_STATUS_IGNORE);
+                }
+        }
+        else{
+                for (int row = 0; row < rows_per_block; row++) {
+
+                        MPI_File_seek(outFile, 3*(start_row_per_proc + row) * width + 3*start_col_per_proc, MPI_SEEK_SET);
+
+                        MPI_File_write(outFile, &block_array_bef[offset(3*cols_per_block+2*3, row+1, 3)], 3*cols_per_block, MPI_BYTE, MPI_STATUS_IGNORE);
+                }
         }
 
         MPI_File_close(&outFile);
@@ -384,8 +492,99 @@ int main(int argc, char** argv) {
  */
 
 
+
+inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/,int image_type) {
+        int i, j;
+
+        //float val=0;
+        if (image_type == 0) {
+
+
+                // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
+                for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
+                        for (j = col_start; j <= col_end; ++j)   // columns [1,cols_per_block] correct
+                                convolute_grey(A, B, i, j, h, width, height);
+        }
+        else{
+/*
+                // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
+                for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
+                        for (j = col_start; j <= col_end; j++)   // columns [1,cols_per_block] correct
+    */                            convolute_rgb(A, B, i, 3*j, h, 3*width + 6, height);
+        }
+}
+
+inline void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/)
+{
+        float val_red = 0;
+        float val_green = 0;
+        float val_blue = 0;
+
+        for (int m = 0; m < 3; ++m)  // kernel rows [0-3] correct
+        {
+                for (int n = 0; n < 3; ++n)  // kernel columns [0-3] correct
+                {
+                        // index of input signal, used for checking boundary
+                        int ii, jj;
+                        ii = i + (m - K_CENTER_Y);  // i +m -1 ----> curr_row_block + curr_row_kernel -1
+
+                        jj = j + 3*(n - K_CENTER_X);  // j +n -1 ----> curr_col_block + curr_col_kernel -1
+
+
+                        val_red+=A[(width)*ii + jj] * h[m][n];
+                        val_green+=A[(width)*ii + jj+1] * h[m][n];
+                        val_blue+=A[(width)*ii + jj+2] * h[m][n];
+
+                        // B[(width)*i + j] = val_red; // P[i][j] += N[ii][jj] * M[m][n];
+                        // B[(width)*i + j+1] = val_green; // P[i][j] += N[ii][jj] * M[m][n];
+                        // B[(width)*i + j+2] = val_blue; // P[i][j] += N[ii][jj] * M[m][n];
+
+                }
+        }
+
+        B[(width)*i + j] = val_red;  // P[i][j] += N[ii][jj] * M[m][n];
+        B[(width)*i + j+1] = val_green;  // P[i][j] += N[ii][jj] * M[m][n];
+        B[(width)*i + j+2] = val_blue;  // P[i][j] += N[ii][jj] * M[m][n];
+
+
+}
+
+inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/)
+{
+        int m, n;
+        float val = 0;
+        int ii=0;
+        int jj=0;
+
+//#pragma omp parallel for simd reduction(+:val) collapse(2)
+        for (m = 0; m < 3; ++m)  // kernel rows [0-3] correct
+        {
+                for (n = 0; n < 3; ++n)  // kernel columns [0-3] correct
+                {
+                        // index of input signal, used for checking boundary
+
+                        ii = i + (m - K_CENTER_Y);  // i +m -1 ----> curr_row_block + curr_row_kernel -1
+
+                        jj = j + (n - K_CENTER_X);  // j +n -1 ----> curr_col_block + curr_col_kernel -1
+
+
+                        val+=A[(width+2)*ii + jj] * h[m][n];
+
+
+                        // B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
+
+                }
+        }
+        B[(width+2)*i + j] = val;  // P[i][j] += N[ii][jj] * M[m][n];
+
+}
+
+
+
+
+
 // inline void convolute_grey(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
-//
+//     printf("lathos \n" );
 //         int ii,jj;
 //         float val=0;
 //
@@ -414,39 +613,50 @@ int main(int argc, char** argv) {
 //                 }
 //         }
 // }
+//
+//
+// inline void convolute_rgb(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
+//
+//         int ii,jj;
+//         float val_red=0;
+//         float val_green=0;
+//         float val_blue=0;
+//
+//         width = width * 3;
+//         height = height * 3;
+//
+//         for (int i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
+//         {
+//                 for (int j = col_start; j <= col_end; j++)  // columns [1,cols_per_block] correct
+//                 {
+//                         val_red = 0;
+//                         val_green = 0;
+//                         val_blue = 0;
+//                         for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
+//                         {
+//
+//                                 for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
+//                                 {
+//                                         // index of input signal, used for checking boundary
+//                                         ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
+//
+//                                         jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
+//
+//                                         // ignore input samples which are out of bound
+//                                         // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
+//                                         val_red+=A[(width+2)*ii + jj] * h[m][n];
+//                                         val_green+=A[(width+2)*ii + jj+1] * h[m][n];
+//                                         val_blue+=A[(width+2)*ii + jj+2] * h[m][n];
+//                                         // }
+//                                 }
+//                         }
+//                         B[(width+2)*i + j] = val_red; // P[i][j] += N[ii][jj] * M[m][n];
+//                         B[(width+2)*i + j+1] = val_green; // P[i][j] += N[ii][jj] * M[m][n];
+//                         B[(width+2)*i + j+2] = val_blue; // P[i][j] += N[ii][jj] * M[m][n];
+//                 }
+//         }
+// }
 
-inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/) {
-int i, j;
-int ii=0;
-int jj=0;
-//float val=0;
-
-#pragma omp parallel for shared(A, B) schedule(static) collapse(2)
-        for (i = row_start; i <= row_end; ++i)          // rows [1,rows_per_block] correct
-                for (j = col_start; j <= col_end; ++j)  // columns [1,cols_per_block] correct
-                        convolute_grey(A, B, i, j, h, width, height, ii, jj, 0);
-}
-
-inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/, int height /*rows*/, int ii, int jj, float val)
-{
-        for (int m = 0; m < 3; ++m) // kernel rows [0-3] correct
-        {
-                for (int n = 0; n < 3; ++n) // kernel columns [0-3] correct
-                {
-                        // index of input signal, used for checking boundary
-                        ii = i + (m - K_CENTER_Y); // i +m -1 ----> curr_row_block + curr_row_kernel -1
-
-                        jj = j + (n - K_CENTER_X); // j +n -1 ----> curr_col_block + curr_col_kernel -1
-
-                        // ignore input samples which are out of bound
-                        // if (ii >= 0 && ii <= height && jj >= 0 && jj <= width+2) {
-                        val+=A[(width+2)*ii + jj] * h[m][n];
-                        // }
-                }
-        }
-        B[(width+2)*i + j] = val; // P[i][j] += N[ii][jj] * M[m][n];
-
-}
 
 
 inline void swap_arrays(unsigned char** A, unsigned char** B){
@@ -472,6 +682,7 @@ inline int Argms_handler(int argc,char** argv, int* image_type,int* width,int* h
         }else{
                 return -2;
         }
+
         return 0;
 }
 
