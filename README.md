@@ -1,1 +1,0 @@
-# image-convolution-parallel-computing
