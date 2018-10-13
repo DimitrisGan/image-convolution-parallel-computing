@@ -706,6 +706,8 @@ inline int ImageChanged(unsigned char * A, unsigned char * B, int array_size)
 
 inline int div2blocks(int height, int width, int num_processes, int* rows_per_block, int* cols_per_block ){
 
+    double double_rows_per_block,double_cols_per_block;
+
         double root_num_processes = sqrt(num_processes);
 
         if ((root_num_processes - floor(root_num_processes)) > 0 ) {
@@ -717,8 +719,19 @@ inline int div2blocks(int height, int width, int num_processes, int* rows_per_bl
                 printf("The rows & cols can't be partitioned equally to the processes! \n" );
                 exit(1);
         }
-        *rows_per_block = height/int_root_num_processes;
-        *cols_per_block = width/int_root_num_processes;
+    double_rows_per_block =(double) height/root_num_processes;
+    double_cols_per_block =(double) width/root_num_processes;
+
+        if (double_rows_per_block - floor(double_rows_per_block ) > 0 ) {
+            printf("The rows that are splitted to processes are not integers! \n" );
+            exit(1);
+        }
+        if (double_cols_per_block - floor(double_cols_per_block) > 0) {
+            printf("The columns that are splitted to processes are not integers! \n" );
+            exit(1);
+        }
+        *rows_per_block =height/int_root_num_processes;
+        *cols_per_block =width/int_root_num_processes;
         // printf("division() : rows_per_block = %d cols_per_block = %d\n",*rows_per_block,*cols_per_block );
         return int_root_num_processes;
 
