@@ -411,14 +411,14 @@ int main(int argc, char** argv) {
 
                 /*check if image changed */
 
-                // changed =0;
-                // changed = ImageChanged(block_array_bef,block_array_after,array_size);
-                // if ( changed ) {
-                //         // printf("GENERATION : %d Image Changed = %d \n",i,changed );
-                // }
-                // else{
-                //         printf("GENERATION : %d Image NOT Changed = %d \n",i,changed );
-                // }
+                changed =0;
+                changed = ImageChanged(block_array_bef,block_array_after,array_size);
+                if ( changed ) {
+                        // printf("GENERATION : %d Image Changed = %d \n",i,changed );
+                }
+                else{
+                        printf("GENERATION : %d Image NOT Changed = %d \n",i,changed );
+                }
 
 
         }
@@ -429,8 +429,8 @@ int main(int argc, char** argv) {
 
 
         /* Parallel write */
-        char *outImage = malloc((strlen(image_name) + 8) * sizeof(char));
-        strcpy(outImage, "filtered_");
+        char *outImage = malloc((strlen(image_name) + strlen("output_images/filtered_")) * sizeof(char));
+        strcpy(outImage, "output_images/filtered_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
@@ -496,21 +496,17 @@ int main(int argc, char** argv) {
 inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/, int height /*rows*/,int image_type) {
         int i, j;
 
-        //float val=0;
         if (image_type == 0) {
-
-
-                // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
+#pragma omp parallel for private(i, j) collapse(2)
                 for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
                         for (j = col_start; j <= col_end; ++j)   // columns [1,cols_per_block] correct
                                 convolute_grey(A, B, i, j, h, width, height);
         }
         else{
-/*
-                // #pragma omp parallel for shared(A, B) schedule(static) collapse(2)
+#pragma omp parallel for private(i, j) collapse(2)
                 for (i = row_start; i <= row_end; ++i)           // rows [1,rows_per_block] correct
                         for (j = col_start; j <= col_end; j++)   // columns [1,cols_per_block] correct
-    */                            convolute_rgb(A, B, i, 3*j, h, 3*width + 6, height);
+                                convolute_rgb(A, B, i, 3*j, h, 3*width + 6, height);
         }
 }
 
@@ -699,11 +695,16 @@ inline int ImageChanged(unsigned char * A, unsigned char * B, int array_size)
 {         // int array_size   = (rows_per_block + 2)*(cols_per_block + 2)* sizeof(unsigned char));
 
         int i;
+        volatile unsigned char flag=0;
+#pragma omp parallel for shared(flag)
         for(i=0; i<array_size; i++) {
+                if(flag) continue;
                 if(A[i]!= B[i])
-                        return 1;
+                        // return 1;
+                        flag = 1;
         }
-        return 0;
+
+        return flag;
 }
 
 
@@ -725,5 +726,4 @@ inline int div2blocks(int height, int width, int num_processes, int* rows_per_bl
         *cols_per_block = width/int_root_num_processes;
         // printf("division() : rows_per_block = %d cols_per_block = %d\n",*rows_per_block,*cols_per_block );
         return int_root_num_processes;
-
 }
