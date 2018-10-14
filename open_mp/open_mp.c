@@ -322,6 +322,7 @@ int main(int argc, char** argv) {
                 changed =0;
                 changed = ImageChanged(block_array_bef,block_array_after,array_size);
                 if ( changed ) {
+                    break;
                         // printf("GENERATION : %d Image Changed = %d \n",i,changed );
                 }
                 // else{
