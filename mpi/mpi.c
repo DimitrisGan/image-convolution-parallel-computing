@@ -20,7 +20,7 @@ int offset(int Cols,int i,int offs );
 void swap_arrays(unsigned char** A, unsigned char** B);
 int ImageChanged(unsigned char* A,unsigned char* B,int array_size);
 
-void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width,int image_type);
+void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width, int image_type);
 void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/);
 void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, float** h, int width /*cols*/);
 
@@ -70,11 +70,11 @@ int main(int argc, char** argv) {
                 exit(1);
         }
 
+
         if (process_id == 0) {
 
                 rooted_num_procs = div2blocks(height, width, num_processes, &rows_per_block, &cols_per_block);
-                printf("rows_per_block = %d | cols_per_block = %d \n",rows_per_block,cols_per_block );
-
+                // printf("rows_per_block = %d | cols_per_block = %d \n",rows_per_block,cols_per_block );
         }
 
         MPI_Bcast(&rooted_num_procs, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -114,6 +114,7 @@ int main(int argc, char** argv) {
                 block_array_bef   = malloc(array_size);
                 block_array_after = malloc(array_size);
         }
+
         //create datatypes for line and column FOR RGB AND GREY;
         //**ATTENTION** keep in mind that LineType is of size cols+2
         MPI_Type_contiguous(cols_per_block+2, MPI_BYTE, &LineGreyType);
@@ -253,15 +254,14 @@ int main(int argc, char** argv) {
                 convolute(block_array_bef, block_array_after, h, 1, rows_per_block, 1, cols_per_block,cols_per_block,image_type);
 
 
+
                 flag1=0;
                 flag2=0;
                 flag11 =0;
                 flag22=0;
                 while (1) {
                         if (north_proc != -1) {
-
                                 MPI_Test(&recv_row_n, &flag1, &status);
-
                                 if (flag1 == 1) {
                                         // convolute(up);
                                         convolute(block_array_bef, block_array_after, h, 1, 1, 1, cols_per_block, cols_per_block,image_type);
@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
                         if (south_proc != -1) {
                                 MPI_Test(&recv_row_s, &flag2, &status);
                                 if (flag2 == 1) {
-                                        // convolute_grey(down)
+                                        // convolute(down)
                                         convolute(block_array_bef, block_array_after, h, rows_per_block, rows_per_block, 1, cols_per_block, cols_per_block,image_type);
                                         flag22=1;
                                 }
@@ -321,11 +321,11 @@ int main(int argc, char** argv) {
                 changed = ImageChanged(block_array_bef,block_array_after,array_size);
                 if ( changed ) {
                         // printf("GENERATION : %d Image Changed = %d \n",i,changed );
+                }
+                else{
+                        // printf("GENERATION : %d Image NOT Changed = %d \n",i,changed );
                         break;
                 }
-                // else{
-                //         // printf("GENERATION : %d Image NOT Changed = %d \n",i,changed );
-                // }
 
 
         }
@@ -336,15 +336,17 @@ int main(int argc, char** argv) {
 
 
         /* Parallel write */
-        char *outImage = malloc((strlen(image_name) + strlen("output_images/filtered_")) * sizeof(char));
-        strcpy(outImage, "output_images/filtered_");
+        // char *outImage = malloc((strlen(image_name) + strlen("output_images/filtered_")) * sizeof(char));
+        char *outImage = malloc((strlen(image_name) + strlen("filtered_")) * sizeof(char));
+
+        // strcpy(outImage, "output_images/filtered_");
+        strcpy(outImage, "filtered_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
         error = MPI_File_open(MPI_COMM_WORLD, outImage, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFile);
         if (error) {
                 printf( "Unable to open the output file..No space! \n" ); fflush(stdout);
-                exit(1);
         }
 
 
@@ -384,6 +386,8 @@ int main(int argc, char** argv) {
         MPI_Type_free(&LineRgbType);
         MPI_Type_free(&ColRgbType);
 
+
+        // Finalize the MPI environment. No more MPI calls can be made after this
         MPI_Finalize();
 
         return 0;
@@ -396,7 +400,6 @@ int main(int argc, char** argv) {
    ██      ██    ██ ██  ██ ██ ██         ██    ██ ██    ██ ██  ██ ██      ██
    ██       ██████  ██   ████  ██████    ██    ██  ██████  ██   ████ ███████
  */
-
 
 
 inline void convolute(unsigned char* A, unsigned char* B, float** h, int row_start, int row_end, int col_start, int col_end, int width /*cols*/,int image_type) {
@@ -423,9 +426,9 @@ inline void convolute_rgb(unsigned char* A, unsigned char* B, int i, int j, floa
         float val_blue = 0;
         int ii=0;
         int jj=0;
-        for (int m = 0; m < 3; ++m)  // kernel rows
+        for (int m = 0; m < 3; ++m)   // kernel rows
         {
-                for (int n = 0; n < 3; ++n)  // kernel columns
+                for (int n = 0; n < 3; ++n)   // kernel columns
                 {
 
                         ii = i + (m - K_CENTER_Y);
@@ -454,13 +457,13 @@ inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, flo
         int jj=0;
         float val=0;
 
-        for (int m = 0; m < 3; ++m)  // kernel rows
+        for (int m = 0; m < 3; ++m)   // kernel rows
         {
-                for (int n = 0; n < 3; ++n)  // kernel columns
+                for (int n = 0; n < 3; ++n)   // kernel columns
                 {
-                        ii = i + (m - K_CENTER_Y);  // i +m -1 ----> curr_row_block + curr_row_kernel -1
+                        ii = i + (m - K_CENTER_Y);   // i +m -1 ----> curr_row_block + curr_row_kernel -1
 
-                        jj = j + (n - K_CENTER_X);  // j +n -1 ----> curr_col_block + curr_col_kernel -1
+                        jj = j + (n - K_CENTER_X);   // j +n -1 ----> curr_col_block + curr_col_kernel -1
 
 
                         val+=A[(width+2)*ii + jj] * h[m][n];
@@ -469,7 +472,7 @@ inline void convolute_grey(unsigned char* A, unsigned char* B, int i, int j, flo
                 }
         }
 
-        B[(width+2)*i + j] = val;  // P[i][j] += N[ii][jj] * M[m][n];
+        B[(width+2)*i + j] = val;   // P[i][j] += N[ii][jj] * M[m][n];
 
 }
 
@@ -502,7 +505,7 @@ inline int Argms_handler(int argc,char** argv, int* image_type,int* width,int* h
         return 0;
 }
 
-inline int offset(int k,int i,int offs ){ //k = cols or rows
+inline int offset(int k,int i,int offs ){  //k = cols or rows
         return k*i + offs;
 }
 
