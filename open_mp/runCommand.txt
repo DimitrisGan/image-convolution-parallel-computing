@@ -1,0 +1,10 @@
+
+Για την εκτέλεση του εκάστοτε εκτελέσιμου :
+
+mpiexec -np <n> ./<mpi_exe, open_mp_exe> <image_name>.raw <grey, rgb> <width> <height>
+
+Παράδειγμα εκτέλεσης mpi με 4 διεργασίες για ασπρόμαυρη εικόνα με διαστάσεις 1920x2520:
+
+mpiexec -np 4 ./mpi_exe waterfall_grey_1920_2520.raw grey 1920 2520
+
+mpiexec -np 4 ./mpi_exe waterfall_rgb_1920_2520.raw rgb 1920 2520
