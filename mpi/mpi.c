@@ -336,11 +336,11 @@ int main(int argc, char** argv) {
 
 
         /* Parallel write */
-        // char *outImage = malloc((strlen(image_name) + strlen("output_images/filtered_")) * sizeof(char));
-        char *outImage = malloc((strlen(image_name) + strlen("filtered_")) * sizeof(char));
+        char *outImage = malloc((strlen(image_name) + strlen("output_images/filtered_")) * sizeof(char));
+        //char *outImage = malloc((strlen(image_name) + strlen("filtered_")) * sizeof(char));
 
-        // strcpy(outImage, "output_images/filtered_");
-        strcpy(outImage, "filtered_");
+        strcpy(outImage, "output_images/filtered_");
+        //strcpy(outImage, "filtered_");
 
         strcat(outImage, image_name);
         MPI_File outFile;
